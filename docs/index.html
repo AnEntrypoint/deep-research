@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>deep-research: manual</title>
+<meta name="description" content="Manual for the deep-research agent skill.">
+<style>
+@page {
+  size: A4;
+  margin: 20mm 18mm 22mm;
+  @bottom-center { content: "deep-research manual  ·  " counter(page); font-family: "Courier New", monospace; font-size: 8pt; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto;
+  max-width: 44rem;
+  padding: 1.5rem 1rem 4rem;
+  color: #000;
+  background: #fff;
+  font: 1rem/1.5 Georgia, "Times New Roman", serif;
+}
+h1, h2, h3, th { font-family: Helvetica, Arial, sans-serif; text-transform: uppercase; }
+h1 { font-size: 2.6rem; line-height: 1; margin: 0 0 .6rem; border-top: 8px solid #000; padding-top: .6rem; }
+h2 { font-size: 1.35rem; line-height: 1.1; margin: 2.2rem 0 .8rem; border-top: 3px solid #000; padding-top: .4rem; }
+h3 { font-size: 1rem; margin: 1.4rem 0 .4rem; }
+p, li { margin: .45rem 0; }
+ul, ol { padding-left: 1.3rem; }
+code, pre { font-family: "Courier New", Courier, monospace; font-size: .9em; }
+code { border: 1px solid #000; padding: 0 .25em; }
+pre { border: 2px solid #000; padding: .7rem .8rem; overflow-x: auto; white-space: pre-wrap; margin: .8rem 0; }
+pre code { border: 0; padding: 0; }
+table { width: 100%; border-collapse: collapse; margin: .8rem 0; font-size: .92rem; }
+th, td { border: 2px solid #000; padding: .3rem .45rem; text-align: left; vertical-align: top; }
+th { font-size: .78rem; border-bottom-width: 4px; }
+a { color: #000; }
+.meta { font-family: "Courier New", monospace; font-size: .82rem; margin: 0 0 .8rem; }
+.toc { border: 2px solid #000; padding: .5rem .9rem; font-family: "Courier New", monospace; font-size: .88rem; margin-top: 1.6rem; }
+.toc ol { margin: .2rem 0; padding-left: 1.5rem; }
+.toc a { text-decoration: none; }
+.lede { font-size: 1.12rem; }
+
+@media print {
+  body { max-width: none; padding: 0; font-size: 10.5pt; line-height: 1.42; }
+  h1 { font-size: 26pt; }
+  h2 { font-size: 14pt; break-before: page; }
+  section:first-of-type h2 { break-before: auto; }
+  h2, h3 { break-after: avoid; }
+  pre, table, tr { break-inside: avoid; }
+  th { border-bottom-width: 2px; }
+  a { text-decoration: none; }
+  a[href^="http"]::after { content: " <" attr(href) ">"; font-family: "Courier New", monospace; font-size: 7.5pt; }
+  .noprint { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <p class="meta">MANUAL · AUTHOR lanmower · SOURCE https://github.com/AnEntrypoint/deep-research</p>
+  <h1>deep-research</h1>
+  <p class="lede">An agent skill that turns one research question into a cited, narrative report. A coordinator fans out parallel research subagents, collects their sourced notes, and has a report writer synthesise one report.</p>
+  <pre><code>npx skills add AnEntrypoint/deep-research</code></pre>
+
+  <nav class="toc noprint" aria-label="Contents">
+    <ol>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#use">Use</a></li>
+      <li><a href="#stages">Seven stages</a></li>
+      <li><a href="#researchers">Researcher count</a></li>
+      <li><a href="#titles">Titles and folders</a></li>
+      <li><a href="#notes">Research notes</a></li>
+      <li><a href="#report">Report format</a></li>
+      <li><a href="#output">Output files</a></li>
+      <li><a href="#limits">Limits</a></li>
+      <li><a href="#layout">Repository layout</a></li>
+    </ol>
+  </nav>
+</header>
+
+<section id="install">
+  <h2>1. Install</h2>
+  <p>Run <code>npx skills add AnEntrypoint/deep-research</code>. The skills CLI reads <code>skills/deep-research/SKILL.md</code> from the repository and installs the skill folder.</p>
+  <p>The skill uses the agent skills format. Its frontmatter has <code>name</code>, which must equal the folder name <code>deep-research</code>, and <code>description</code>, which tells the agent when to load it.</p>
+</section>
+
+<section id="use">
+  <h2>2. Use</h2>
+  <p>The skill loads for requests that need research across several sources: comparing options or alternatives, analysing trends or history, understanding markets or industries, or reviewing literature or studies. It ends in a narrative report.</p>
+  <p>Example request: <em>Compare CRM platforms for small businesses across pricing, features, integrations and user reviews.</em></p>
+  <p>A single factual question needs one researcher and no decomposition.</p>
+  <p><strong>Requirement.</strong> The coordinator must be able to spawn subagents with the <code>Agent</code> or <code>Task</code> tool. Without one, the agent researches the question directly.</p>
+</section>
+
+<section id="stages">
+  <h2>3. Seven stages</h2>
+  <table>
+    <thead><tr><th>Stage</th><th>What the coordinator does</th></tr></thead>
+    <tbody>
+      <tr><td>1. Clarify</td><td>Asks follow-up questions with <code>AskUserQuestion</code>, only for missing or ambiguous details that would change the research: ambiguous terms, jurisdiction left unspecified, ambiguous entity names.</td></tr>
+      <tr><td>2. Title and folders</td><td>Picks a title and creates <code>research_notes/&lt;title&gt;/</code> and <code>reports/</code> in the working directory.</td></tr>
+      <tr><td>3. Decompose</td><td>Splits the question into mutually exclusive, collectively exhaustive subtopics. Sets the researcher count (section 4).</td></tr>
+      <tr><td>4. Research</td><td>Spawns one foreground research subagent per subtopic, all in a single turn. Each subagent reads <code>references/researcher.md</code> first.</td></tr>
+      <tr><td>5. Extra round</td><td>Optional. Spawns researchers for a critical gap, once only. Then moves straight on.</td></tr>
+      <tr><td>6. Report</td><td>Spawns one report writer, which reads <code>references/report-writer.md</code> and writes <code>reports/&lt;title&gt;.md</code>.</td></tr>
+      <tr><td>7. Deliver</td><td>Sends the report with a file tool if one exists, else copies it to an outputs folder, else leaves it in <code>reports/</code>. Then gives a 3 to 5 sentence summary.</td></tr>
+    </tbody>
+  </table>
+  <p>The coordinator never conducts research or writes the report itself. This keeps its context clean.</p>
+</section>
+
+<section id="researchers">
+  <h2>4. Researcher count</h2>
+  <table>
+    <thead><tr><th>Researchers</th><th>Use when</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>No meaningful decomposition: a single factual question.</td><td>Who won a given match?</td></tr>
+      <tr><td>3</td><td>A few natural angles on a focused topic. Default when in doubt.</td><td>Mechanisms, observed data, projections.</td></tr>
+      <tr><td>4</td><td>Distinct facets or evaluation criteria.</td><td>Pricing, features, integrations, reviews.</td></tr>
+      <tr><td>5</td><td>Multiple independent entities, regions or domains.</td><td>US, EU, China, UK, industry self-regulation.</td></tr>
+      <tr><td>6+</td><td>A large enumerable set that needs systematic coverage.</td><td>Adoption rates by state, assigned to regional clusters.</td></tr>
+    </tbody>
+  </table>
+  <p>Subtopics that carry constraints from the question, such as time or place, pass those constraints to every subagent.</p>
+</section>
+
+<section id="titles">
+  <h2>5. Titles and folders</h2>
+  <p>The title names the folder and the report file, and appears as the report's title. It must be:</p>
+  <ul>
+    <li>3 to 6 words and under 50 characters;</li>
+    <li>sentence case, using letters, numbers and single spaces only;</li>
+    <li>free of hyphens, underscores, apostrophes and other punctuation;</li>
+    <li>written in the user's language, with accented and non-Latin letters kept as written.</li>
+  </ul>
+  <p><strong>Returning to an earlier topic.</strong> The new title must say what this request adds or changes, or repeat the earlier title with the next number. The most recent earlier report and notes folder are passed to the report writer as background. If that material is gone, the writer researches what is missing.</p>
+  <p><strong>Independent redo.</strong> When the user asks for earlier research to be redone, the title is chosen the same way, but earlier material is not passed on.</p>
+  <p>An earlier request's folder is never renamed, moved or written into.</p>
+</section>
+
+<section id="notes">
+  <h2>6. Research notes</h2>
+  <p>Each researcher saves <code>research_notes/&lt;title&gt;/&lt;topic&gt;.md</code>. For each key question the note holds four parts:</p>
+  <ul>
+    <li><strong>Takeaway:</strong> one or two sentences.</li>
+    <li><strong>Cited Findings:</strong> facts, statistics, claims or opinions, each with an inline source link. Conflicting sources are named as contradicted.</li>
+    <li><strong>Inferences:</strong> conclusions drawn from the cited findings.</li>
+    <li><strong>Gaps:</strong> questions that could not be answered, and why.</li>
+  </ul>
+  <p>Researchers prefer primary sources, separate confirmed fact from speculation, and never invent a statistic. A claim without a source moves to Gaps. A typical run uses about 10 tool calls and stops at 15.</p>
+</section>
+
+<section id="report">
+  <h2>7. Report format</h2>
+  <ul>
+    <li><strong>Title:</strong> about six words, active verb, sentence case.</li>
+    <li><strong>BLUF:</strong> one paragraph of 5 to 8 sentences. It answers the main question first, so a reader can stop there.</li>
+    <li><strong>Body:</strong> 3 to 5 signpost sections with narrative headers. Dense prose, <strong>bold</strong> key facts, no bullet lists, citations as <code>([Source](URL))</code>.</li>
+    <li><strong>Conclusion:</strong> one or two paragraphs of new takeaways, not a summary.</li>
+  </ul>
+  <p>A claim with no source URL is dropped. The writer states uncertainty plainly and does not hedge with words such as "may" or "possibly".</p>
+</section>
+
+<section id="output">
+  <h2>8. Output files</h2>
+  <pre><code>research_notes/&lt;title&gt;/&lt;topic&gt;.md     one notes file per subtopic
+reports/&lt;title&gt;.md                    the final report</code></pre>
+  <p>Both folders sit in the directory used for earlier research in the conversation, or in the current working directory for a first request.</p>
+</section>
+
+<section id="limits">
+  <h2>9. Limits</h2>
+  <ul>
+    <li>The skill needs a host that can spawn subagents. Without it, it falls back to direct research.</li>
+    <li>Findings are only as good as the sources the subagents can reach. Gaps are reported, not filled.</li>
+    <li>The extra research round is capped at one, to avoid timeouts and rate limits.</li>
+    <li>Earlier research is reused only while its report and notes folder remain on disk.</li>
+  </ul>
+</section>
+
+<section id="layout">
+  <h2>10. Repository layout</h2>
+  <pre><code>skills/deep-research/
+  SKILL.md                    coordinator instructions and frontmatter
+  references/
+    researcher.md             brief for each research subagent
+    report-writer.md          brief for the report writer
+docs/
+  index.html                  this manual
+  .nojekyll                   serve as plain HTML</code></pre>
+  <p>Author: lanmower. Source: <a href="https://github.com/AnEntrypoint/deep-research">github.com/AnEntrypoint/deep-research</a>. No license is declared yet.</p>
+</section>
+
+</body>
+</html>
